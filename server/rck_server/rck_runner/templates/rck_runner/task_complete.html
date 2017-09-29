@@ -1,0 +1,5 @@
+<h1>Task {{ task_id }}</h1>
+<p>Task {{ task_id }} has completed</p>
+<form action="{% url 'rck_runner:get_results_file' task_id %}">
+    <input type="submit" value="Download Results" />
+</form>

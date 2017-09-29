@@ -1,0 +1,1 @@
+default_app_config = 'rck_runner.apps.RckRunnerConfig'

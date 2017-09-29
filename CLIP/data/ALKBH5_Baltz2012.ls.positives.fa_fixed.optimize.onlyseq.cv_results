@@ -1,0 +1,58 @@
+ACC    0.58257   pred_thresh  0.500000
+PPV    0.59487   pred_thresh  0.500000
+NPV    0.57240   pred_thresh  0.500000
+SEN    0.53504   pred_thresh  0.500000
+SPC    0.63074   pred_thresh  0.500000
+PRE    0.59487   pred_thresh  0.500000
+REC    0.53504   pred_thresh  0.500000
+PRF    0.56337   pred_thresh  0.500000
+LFT    1.18189   pred_thresh  0.500000
+SAR   -10.22633   pred_thresh  0.500000 wacc  1.000000 wroc  1.000000 wrms  1.000000 
+
+       Predicted_1  Predicted_0   Threshold  0.500000
+True_1  649.0000       564.0000
+True_0  442.0000       755.0000
+
+ACC    0.59253   freq_thresh -4.021755
+PPV    0.59522   freq_thresh -4.021755
+NPV    0.58981   freq_thresh -4.021755
+SEN    0.59522   freq_thresh -4.021755
+SPC    0.58981   freq_thresh -4.021755
+PRE    0.59522   freq_thresh -4.021755
+REC    0.59522   freq_thresh -4.021755
+PRF    0.59522   freq_thresh -4.021755
+LFT    1.18259   freq_thresh -4.021755
+SAR   -10.22301   freq_thresh -4.021755 wacc  1.000000 wroc  1.000000 wrms  1.000000 
+
+       Predicted_1  Predicted_0   Threshold -4.021755
+True_1  722.0000       491.0000
+True_0  491.0000       706.0000
+
+Caution: 2 Different Thresholds Achieved Max Accuracy.
+Run with -accplot option to see accuracy vs. threshold.
+
+ACC    0.59876   max_acc_thresh -14.856400
+PPV    0.58039   max_acc_thresh -14.856400
+NPV    0.63068   max_acc_thresh -14.856400
+SEN    0.73207   max_acc_thresh -14.856400
+SPC    0.46366   max_acc_thresh -14.856400
+PRE    0.58039   max_acc_thresh -14.856400
+REC    0.73207   max_acc_thresh -14.856400
+PRF    0.64747   max_acc_thresh -14.856400
+LFT    1.15313   max_acc_thresh -14.856400
+SAR   -10.22094   max_acc_thresh -14.856400 wacc  1.000000 wroc  1.000000 wrms  1.000000 
+
+       Predicted_1  Predicted_0   threshold -14.856400
+True_1  888.0000       325.0000
+True_0  642.0000       555.0000
+
+PRB    0.59522
+APR    0.62310
+ROC    0.62795
+R50    0.06262
+RKL    2406
+TOP1   1.00000
+TOP10  1.00000
+RMS   32.88952
+CA1    0.35537 19_0.05_bins
+CA2   24.17753 Bin_Size 100

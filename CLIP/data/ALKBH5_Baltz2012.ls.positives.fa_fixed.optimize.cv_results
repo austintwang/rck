@@ -1,0 +1,55 @@
+ACC    0.62780   pred_thresh  0.500000
+PPV    0.60025   pred_thresh  0.500000
+NPV    0.67986   pred_thresh  0.500000
+SEN    0.77988   pred_thresh  0.500000
+SPC    0.47368   pred_thresh  0.500000
+PRE    0.60025   pred_thresh  0.500000
+REC    0.77988   pred_thresh  0.500000
+PRF    0.67838   pred_thresh  0.500000
+LFT    1.19259   pred_thresh  0.500000
+SAR   -2.30902   pred_thresh  0.500000 wacc  1.000000 wroc  1.000000 wrms  1.000000 
+
+       Predicted_1  Predicted_0   Threshold  0.500000
+True_1  946.0000       267.0000
+True_0  630.0000       567.0000
+
+ACC    0.63651   freq_thresh  3.913530
+PPV    0.63891   freq_thresh  3.913530
+NPV    0.63409   freq_thresh  3.913530
+SEN    0.63891   freq_thresh  3.913530
+SPC    0.63409   freq_thresh  3.913530
+PRE    0.63891   freq_thresh  3.913530
+REC    0.63891   freq_thresh  3.913530
+PRF    0.63891   freq_thresh  3.913530
+LFT    1.26940   freq_thresh  3.913530
+SAR   -2.30612   freq_thresh  3.913530 wacc  1.000000 wroc  1.000000 wrms  1.000000 
+
+       Predicted_1  Predicted_0   Threshold  3.913530
+True_1  775.0000       438.0000
+True_0  438.0000       759.0000
+
+ACC    0.63942   max_acc_thresh  3.641440
+PPV    0.63849   max_acc_thresh  3.641440
+NPV    0.64041   max_acc_thresh  3.641440
+SEN    0.65375   max_acc_thresh  3.641440
+SPC    0.62490   max_acc_thresh  3.641440
+PRE    0.63849   max_acc_thresh  3.641440
+REC    0.65375   max_acc_thresh  3.641440
+PRF    0.64603   max_acc_thresh  3.641440
+LFT    1.26855   max_acc_thresh  3.641440
+SAR   -2.30515   max_acc_thresh  3.641440 wacc  1.000000 wroc  1.000000 wrms  1.000000 
+
+       Predicted_1  Predicted_0   threshold  3.641440
+True_1  793.0000       420.0000
+True_0  449.0000       748.0000
+
+PRB    0.63891
+APR    0.66731
+ROC    0.68759
+R50    0.06192
+RKL    2389
+TOP1   1.00000
+TOP10  1.00000
+RMS    9.24246
+CA1    0.31243 19_0.05_bins
+CA2    6.85342 Bin_Size 100

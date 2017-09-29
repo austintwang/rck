@@ -1,0 +1,12 @@
+<h1>Predicton Task {{ task_id }}</h1>
+<h2>Oops! Something's gone wrong.</h2>
+<h2>{{ error_message }}</h2>
+{% if error_filetype}
+	<p>{{ error_filetype }}</p>
+{% endif %}
+{% if error_linenum %}
+	<p>Line {{ error_linenum }}</p>
+{% endif %}
+{% if error_culprit}
+	<p>{{ error_culprit }}</p>
+{% endif %}

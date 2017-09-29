@@ -1,0 +1,58 @@
+ACC    0.61950   pred_thresh  0.500000
+PPV    0.61280   pred_thresh  0.500000
+NPV    0.62750   pred_thresh  0.500000
+SEN    0.66282   pred_thresh  0.500000
+SPC    0.57561   pred_thresh  0.500000
+PRE    0.61280   pred_thresh  0.500000
+REC    0.66282   pred_thresh  0.500000
+PRF    0.63683   pred_thresh  0.500000
+LFT    1.21753   pred_thresh  0.500000
+SAR   -7.61067   pred_thresh  0.500000 wacc  1.000000 wroc  1.000000 wrms  1.000000 
+
+       Predicted_1  Predicted_0   Threshold  0.500000
+True_1  804.0000       409.0000
+True_0  508.0000       689.0000
+
+ACC    0.61743   freq_thresh  2.991080
+PPV    0.61995   freq_thresh  2.991080
+NPV    0.61487   freq_thresh  2.991080
+SEN    0.61995   freq_thresh  2.991080
+SPC    0.61487   freq_thresh  2.991080
+PRE    0.61995   freq_thresh  2.991080
+REC    0.61995   freq_thresh  2.991080
+PRF    0.61995   freq_thresh  2.991080
+LFT    1.23172   freq_thresh  2.991080
+SAR   -7.61136   freq_thresh  2.991080 wacc  1.000000 wroc  1.000000 wrms  1.000000 
+
+       Predicted_1  Predicted_0   Threshold  2.991080
+True_1  752.0000       461.0000
+True_0  461.0000       736.0000
+
+Caution: 2 Different Thresholds Achieved Max Accuracy.
+Run with -accplot option to see accuracy vs. threshold.
+
+ACC    0.62158   max_acc_thresh  0.211483
+PPV    0.61358   max_acc_thresh  0.211483
+NPV    0.63134   max_acc_thresh  0.211483
+SEN    0.67024   max_acc_thresh  0.211483
+SPC    0.57226   max_acc_thresh  0.211483
+PRE    0.61358   max_acc_thresh  0.211483
+REC    0.67024   max_acc_thresh  0.211483
+PRF    0.64066   max_acc_thresh  0.211483
+LFT    1.21908   max_acc_thresh  0.211483
+SAR   -7.60998   max_acc_thresh  0.211483 wacc  1.000000 wroc  1.000000 wrms  1.000000 
+
+       Predicted_1  Predicted_0   threshold  0.211483
+True_1  813.0000       400.0000
+True_0  512.0000       685.0000
+
+PRB    0.61995
+APR    0.65048
+ROC    0.65858
+R50    0.07131
+RKL    2404
+TOP1   1.00000
+TOP10  1.00000
+RMS   25.11009
+CA1    0.37886 19_0.05_bins
+CA2   18.24007 Bin_Size 100

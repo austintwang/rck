@@ -1,0 +1,5 @@
+epochs: 50
+lambda: 0.001
+R: 4
+D: 5
+bitsize: 14

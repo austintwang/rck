@@ -1,0 +1,19 @@
+<h1>Prediction Task {{ task_id }}</h1>
+<p>Task {{ task_id }} has completed</p>
+<form action="{% url 'rck_runner:get_results_file' task_id %}">
+    <input type="submit" value="Download Results" />
+</form>
+{% for i in top_sequences %}
+	<h2>Top sequence for k-mer width {{ i.0 }}</h2>
+		<table style="width:100%">
+			<tr>
+				<th>Score</th>
+				<th>Sequence</th> 
+			</tr>
+			{% for j in i.1 %}
+			<tr>
+				<td>{{ j.score }}</td>
+				<td>{{ j.sequence }}</td>
+			</tr>
+			{% endfor %}
+{% endfor %}

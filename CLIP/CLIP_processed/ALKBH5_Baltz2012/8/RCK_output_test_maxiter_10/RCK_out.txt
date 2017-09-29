@@ -1,0 +1,47 @@
+data file name range
+Data file name range after
+width range
+min width 5
+max width 5
+Read file
+open log file
+MOTIFWIDTH 5
+  f = 590.032
+  f = 587.471
+  f = 569.494
+  f = 562.971
+  f = 552.357
+  f = 548.146
+  f = 545.028
+  f = 543.38
+  f = 542.851
+  f = 541.995
+  f = 541.744
+The search is terminated. Case 5
+MOTIFWIDTH 5
+  f = 586.297
+  f = 575.594
+  f = 559.86
+  f = 553.891
+  f = 548.057
+  f = 545.359
+  f = 543.346
+  f = 542.403
+  f = 541.703
+  f = 541.384
+  f = 540.847
+The search is terminated. Case 5
+MOTIFWIDTH 5
+  f = 585.254
+  f = 573.658
+  f = 558.441
+  f = 552.539
+  f = 547.28
+  f = 544.645
+  f = 543.1
+  f = 541.987
+  f = 541.58
+  f = 541.418
+  f = 541.297
+The search is terminated. Case 5
+FILES

@@ -1,0 +1,11 @@
+<h1>RCK Webserver</h1>
+<form enctype="multipart/form-data" method="post" action="{% url 'rck_runner:inference_options' %}">
+    {% csrf_token %}
+    {{ inference_form.as_p }}
+    <input type="submit" value="Run" />
+</form>
+<form enctype="multipart/form-data" method="post" action="{% url 'rck_runner:prediction_options' %}">
+    {% csrf_token %}
+    {{ prediction_form.as_p }}
+    <input type="submit" value="Run" />
+</form>

@@ -1,0 +1,11 @@
+Positive, negative
+sequences, intensities
+
+annotations: inputs, or RNAplfold
+Different annotation alphabets (PHIME, PU)
+
+Prediction (known, or given by user)
+
+BED files
+
+visualization

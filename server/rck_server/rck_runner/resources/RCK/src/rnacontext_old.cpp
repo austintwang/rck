@@ -1,0 +1,1221 @@
+/*
+ *
+ *  Created by Hilal Kosucu on 15/01/09.
+ *  
+ *
+ */
+
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <stdio.h>
+#include <math.h>
+#include <string.h>
+#include "lib/lbfgsb.h"
+#include "rnacontextLibrary.cpp"
+#include <iomanip>
+#include <assert.h>
+
+
+
+using namespace std;
+
+
+//
+int iter = 0;
+
+//prototypes
+double calcScore(int seqID);
+void findBestScores(string filename, int motifWidth, int numBest);
+double calcScoreTest(int seqID);
+double calcScoreTestSeq(int seqID);
+int readData(string inputFileName, vector<string> & seqs, vector<double> & ratios);
+
+
+// Helper function: converts bases e.g. A,C,G,U to numbers 0,1,2,3
+int basetoInt (char base)
+{
+	for(int i = 0 ; i < AlphabetSize ; i++)
+   	{ 
+   		if(base == baseAlphabet[i])
+			return  i;
+	}
+	return -1;   // Error 
+	
+}
+// Helper function: converts annotation alphabet to numeric values 
+int annottoInt (char annotAlph)
+{
+	for(int i = 0 ; i < AnnotAlphabetSize ; i++)
+   	{ 
+   		if(annotAlph == annotAlphabet[i])
+			return  i;
+	}
+	return -1;   // Error 
+}
+
+// Helper Function: sum the corresponding base parameters of a kmer "motif"
+double sumBaseParamsFunc(string motif)
+{
+  //  cout << "In sum base params func" << endl;
+	double sum = 0;
+	for(int i =0; i <motifWidth; i++)
+	{    
+		 sum += baseParams[basetoInt(motif.at(i))][i];
+		 assert(basetoInt(motif.at(i)) != -1);
+    }
+	return sum;
+}
+
+// Helper Function: sum the correponding kmer starting at startIndex within sequence specified by seqID
+double sumBaseParamsFunc(int seqID, int startIndex)
+{
+  //  cout << "In sum base params func" << endl;
+	double sum = 0;
+	for(int i =0; i <motifWidth; i++)
+	{    
+	  //	  cout << seqsTrain[seqID][startIndex+i] << endl;
+		 sum += baseParams[basetoInt(seqsTrain[seqID][startIndex+i])][i];
+		 assert(basetoInt(seqsTrain[seqID][startIndex+i]) != -1);
+    }
+	return sum;
+}
+
+// Helper Function: has the same functionality as sumBaseParamsFunc but uses test sequences
+double sumBaseParamsTestFunc(int seqID, int startIndex)
+{
+	double sum = 0;
+	for(int i =0; i <motifWidth; i++)
+	{    
+		 sum += baseParams[basetoInt(seqsTest[seqID][startIndex+i])][i];
+		 assert(basetoInt(seqsTest[seqID][startIndex+i]) != -1);
+    }
+	return sum;
+}
+
+// Helper Function: sums the annotation or structure parameters for the kmer starting at "startIndex" in sequence "seqID" for annotation "letter"
+double sumProfilesFunc(int seqID, int letter, int startIndex)
+{
+	double sum = 0;
+	for(int i =0; i <motifWidth; i++)
+	{    
+		 sum += inputAnnotsTrain[seqID][letter][startIndex +i];
+	}
+	return sum;	
+}
+
+// Helper Function: has the same functionality as sumProfilesFunc, but for test sequences
+double sumProfilesFuncTest(int seqID, int letter, int startIndex)
+{
+	double sum = 0;
+	for(int i =0; i <motifWidth; i++)
+	{    
+		 sum += inputAnnotsTest[seqID][letter][startIndex +i];
+	}
+	return sum;	
+}
+
+
+// Takes the updated parameters from paraVec and restore those values to the structures defined for parameters  
+void vecToPara(ap::real_1d_array& paraVec) {
+	int count = 1;
+	// map back the base parameters
+	for (int i=0; i<AlphabetSize; i++){
+	  for (int j=0; j<motifWidth; j++) {
+		  baseParams[i][j] = paraVec(count);  
+		  count++;
+	   } 
+	}
+
+   // map back the annot parameters
+    for (int i=0; i<AnnotAlphabetSize; i++){
+		  annotParams[i] = paraVec(count);  
+		  count++;
+    }
+	
+	//map back bias
+	biasS = paraVec(count); 		
+	count++;
+	
+	biasA = paraVec(count);	
+	count++;  
+	  
+	parA = exp(paraVec(count)); 	
+	count++;
+	
+	parB = paraVec(count); 	
+}
+
+// Reads the annotation profile from supplied file with filename "filename"
+void readAnnots(char* filename, Annots & annots, int seqNum, bool meanvar = false)
+{
+	string line;
+	string structure;
+	string seq;
+	double prob;
+	int seqCount = 0;
+	int pos = 0;
+	int seqLengths[seqNum];
+    int sumLengths = 0;
+	double data;
+    ifstream input;
+    input.open(filename);
+    if(input.fail())
+		cout<<"cannot open the annotation file"<<endl;
+	while(getline(input, line))
+	{	
+		for(int letter = 0 ; letter < AnnotAlphabetSize; letter++)
+		{			
+			getline(input,line);
+			//			cout << line << endl;
+			istringstream ins;
+			ins.str(line);
+			while(!ins.eof())
+			{
+				ins>>data;
+				annots[seqCount][letter][pos] = data;                           
+				pos++;				
+			}
+			seqLengths[seqCount] = pos - 1;
+			pos = 0;			         	 
+		}  	    
+		seqCount++;	        
+	}
+	//	cout << "Read all lines " << meanvar <<  endl;
+	if(meanvar)
+	{
+	  //	  cout << "In meanvar" << endl;
+		double sum= 0;
+		double diffSum = 0; 
+		double diff = 0;
+		
+		for(int letter = 0; letter < AnnotAlphabetSize; letter++)
+		{
+			sumLengths = 0;
+			for(int seqID = 0; seqID < seqNum ; seqID++)
+			{
+				for(int pos = 0 ; pos < seqLengths[seqID]; pos++)
+				{ 
+			    	sum += annots[seqID][letter][pos];
+
+				}
+				sumLengths += seqLengths[seqID];
+			}			
+			means[letter] = sum / sumLengths;
+			for(int seqID = 0; seqID < seqNum ; seqID++)
+			{
+				for(int pos = 0 ; pos < seqLengths[seqID]; pos++)
+				{
+					diff = means[letter] - annots[seqID][letter][pos];
+					diffSum += diff * diff;
+				}			
+			}
+			variances[letter] = diffSum / sumLengths ;
+			diffSum = 0;
+			sum = 0;
+		}
+	}
+	//	cout << "At the end of readAnnots" << endl;
+}
+
+
+// Get the updated parameters from optimization module and recalculate the scores of the sequences
+double originalFunc(ap::real_1d_array& paraVec, bool last = false) 
+{
+	double result = 0;
+	double regVal = 0;
+	vecToPara(paraVec); // get the updated parameters
+	//	cout << "In original func" << endl;
+	for(int i = 0; i < trainSeqNum; i++)
+	{
+	  //	  cout << i << endl;
+	  //	  cout << calcScore(i) << endl;
+		scoresTrain[i] = calcScore(i);
+	}
+	//	cout << "Calculated scores" << endl;
+	for (int i = 0; i < trainSeqNum; i++) 
+	{
+		result += square(ratiosTrain[i] - parA * scoresTrain[i] - parB) ;
+	}
+
+	// regularization
+	for (int l=0; l<motifWidth; l++){
+		for (int k=0; k<AlphabetSize; k++)
+			regVal += baseParams[k][l] * baseParams[k][l];
+	}
+	for (int k=0; k<AnnotAlphabetSize; k++)
+		regVal += annotParams[k] * annotParams[k];
+     
+	result += regVal * SMALL2;   // SMALL2 corresponds to alpha
+	return result;
+}
+// Test the parameters learned by the optimization procedure by scpring test sequences and output these scores
+void testBestParams(string outFileName, string modelFileName, int numParams)
+{
+	ofstream out;
+	out.open(outFileName.c_str());
+	ofstream modelOut;
+	modelOut.open(modelFileName.c_str());
+	double result = 0;
+	
+	for(int i = 0; i < testSeqNum ; i++)
+	{ 	   
+   	 	scoresTest[i] = calcScoreTest(i);  
+        out<<ratiosTest[i]<<"\t"<<scoresTest[i]<<endl;  	
+	}  
+
+	for (int i = 0; i < testSeqNum; i++) 
+	{
+		result += square(ratiosTest[i] - parA * scoresTest[i] - parB) ;
+	}
+	modelOut<<"Error on the test set: "<<result<<endl;
+}
+// Test the parameters learned by the optimization procedure by scpring test sequences and output these scores
+void testBestParamsSeq(string outFileName, string modelFileName, int numParams)
+{
+	double score = 0;
+	double result = 0;	
+	ofstream out;
+	out.open(outFileName.c_str());
+	ofstream modelOut;
+	modelOut.open(modelFileName.c_str());
+
+	
+	for(int i = 0; i < testSeqNum ; i++)
+	{ 	   
+   	 	score = calcScoreTestSeq(i);  
+        out<<ratiosTest[i]<<"\t"<<scoresTest[i]<<endl; 
+		result += square(ratiosTest[i] - parA * score - parB) ;
+	}  
+
+	modelOut<<"Error on the test set seq only: "<<result<<endl;
+}
+
+
+// Initializes and optimized the parameters
+void searchMotif(int seedNum, int seedWidth, int minWidth, int maxWidth, char *outFileName, char* annotFileName) 
+{
+		
+	ofstream modelOut;
+	ofstream outTrain;
+		
+	bool once = false;
+	string annotFileString = annotFileName;
+	string annotAlphStr = annotAlphabet;
+	string outFile = outFileName;
+	string modelFileName;
+	string testFileName;
+	string testFileNameSeq;
+	string rankFileName; 
+	int numParams;
+
+	int initNum;
+	int inisave;
+	
+	double smallFactor = 0.1;
+	double error = 0;
+	double bestError = MAX_ERROR;
+	
+	int numBest = 4;
+	
+	int alphIndex, annotIndex;
+	string paramFilename;
+	paramFilename = "/data/cb/yaronore/RNAcontext/RNAcontext/outputs/params_" + outFile + ".txt" ;
+	ofstream outParam;
+	outParam.open(paramFilename.c_str());
+	if(outParam.fail())
+		cout<<paramFilename<<" can not be opened "<<endl;
+	/**************** optimizer settings **********************************/ 
+	const double epsg     = 1e-6 ;
+	const double epsf     = 1e-6;
+	const double epsx     = 1e-6;
+	const int maxiter  = 200;  
+	const int m = 5; 
+	int info; // holds the information about why search is terminated
+	int paramCounter;
+	int numDim;  //number of dimensions
+	/**************** optimizer settings **********************************/ 
+	// used to record the results with smaller motifWidth.
+	double biasAPrev, biasSPrev, parAPrev, parBPrev;
+	//best parameters
+	double bestBiasA, bestBiasS, bestParA, bestParB;
+	// PWMs
+	baseParams = (double **)malloc(AlphabetSize*sizeof(double *));
+	annotParams = (double *)malloc(AnnotAlphabetSize*sizeof(double));
+
+	double *baseParamsPrev[AlphabetSize], annotParamsPrev[AnnotAlphabetSize];
+	double *bestBaseParams[AlphabetSize], *bestBaseParamsScaled[AlphabetSize], bestAnnotParams[AnnotAlphabetSize];
+	
+	/********ALLOCATE MEMORY FOR PARAMSPREV*****************************************/
+	for(int i = 0; i < AlphabetSize ; i++)	
+	{
+		baseParamsPrev[i] = (double *)malloc(maxWidth * sizeof(double));	
+	}
+
+	/**************** BIG LOOP MOTIFWIDTH CHANGES **********************************/
+	for (int mw = minWidth; mw <= maxWidth; mw++)
+	{
+		motifWidth = mw;
+		bestError = MAX_ERROR;
+	
+		//allocate memory for all the pointers
+		for (int i=0; i<AlphabetSize; i++)
+		{
+			baseParams[i] = (double*) malloc(sizeof(double)*motifWidth);
+			bestBaseParams[i] = (double*) malloc(sizeof(double)*motifWidth);
+			bestBaseParamsScaled[i] = (double*) malloc(sizeof(double)*motifWidth);
+		}
+		
+		once = false;
+		   
+		initNum = MAX(3, seedNum);
+
+		/* optimizer settings starts here */
+
+		numDim = motifWidth * AlphabetSize  + AnnotAlphabetSize + 2 + 2;   // +1 for bias +2 for parA and parB
+		const int n = numDim;
+		ap::real_1d_array x;
+		x.setbounds(1,n);
+		
+		ap::integer_1d_array  constraints;
+		ap::real_1d_array lower_bounds;
+		ap::real_1d_array upper_bounds;
+		
+		constraints.setbounds(1,n);
+		lower_bounds.setbounds(1,n);
+		upper_bounds.setbounds(1,n);
+		/* optimizer settings until here  */
+		
+		/***********Memory Allocation for Test Set***********/
+		for(int i = 0 ; i < testSeqNum ; i++)
+		{	
+			kmerNumsTest[i] = seqsTest[i].length()- motifWidth +1; 
+			baseDeltaValsTest[i] = (int ***) malloc(sizeof(int**)* kmerNumsTest[i]);
+			for(int k = 0 ; k < kmerNumsTest[i]; k++)
+			{      			
+       			baseDeltaValsTest[i][k] = (int **) malloc(sizeof(int*)* AlphabetSize);
+    			for(int j = 0 ; j<AlphabetSize; j++)
+    	 		{	
+					baseDeltaValsTest[i][k][j] = (int *) malloc(sizeof(int)* motifWidth);
+					for(int n = 0; n < motifWidth ; n++)
+					{       	   	     
+						if(seqsTest[i][k+n] == baseAlphabet[j])
+							baseDeltaValsTest[i][k][j][n]  = 1;
+						else
+							baseDeltaValsTest[i][k][j][n]  = 0;   			   	     				   
+					}
+       			}
+			}
+		}
+		/***********Memory Allocation for Training Set***********/
+		for(int i = 0 ; i < trainSeqNum ; i++)
+		{	
+			kmerNumsTrain[i] = seqsTrain[i].length()- motifWidth +1; 
+			affinityValsTrain[i] = (double*) malloc(sizeof(double) * kmerNumsTrain[i]);
+			sumBaseParamsTrain[i] = (double*) malloc(sizeof(double) * kmerNumsTrain[i]); 
+			AffinitySeqVals[i] = (double*) malloc(sizeof(double) * kmerNumsTrain[i]);
+            AffinityAnnotVals[i] = (double*) malloc(sizeof(double) * kmerNumsTrain[i]);
+			baseDeltaValsTrain[i] = (int ***) malloc(sizeof(int**)* kmerNumsTrain[i]);
+			sumAnnotParamsTrain[i] = (double**) malloc(sizeof(double*) * AnnotAlphabetSize);
+			for(int j =0 ; j < AnnotAlphabetSize ; j++)
+			{
+				sumAnnotParamsTrain[i][j] = (double*) malloc(sizeof(double) * kmerNumsTrain[i]);     
+			}
+
+			for(int k = 0 ; k < kmerNumsTrain[i]; k++)
+			{
+       			baseDeltaValsTrain[i][k] = (int **) malloc(sizeof(int*)* AlphabetSize);      		
+    			for(int j = 0 ; j<AlphabetSize; j++)
+    	 		{
+					baseDeltaValsTrain[i][k][j] = (int *) malloc(sizeof(int)* motifWidth);   	 			
+					for(int n = 0; n < motifWidth ; n++)
+					{
+						if(seqsTrain[i][k+n] == baseAlphabet[j])
+							baseDeltaValsTrain[i][k][j][n]  = 1;  	     	
+						else
+							baseDeltaValsTrain[i][k][j][n]  = 0;           	   	     					   	     				   
+					}
+       			}
+			}
+		}
+		
+		string mwStr;
+		stringstream outs;
+		outs << motifWidth;
+		mwStr = outs.str();
+		/**************** DIFFERENT INITIALIZATIONS **********************************/
+		for (int ini = 0; ini < initNum; ini++) 
+		{
+			paramCounter = 1; //counter for parameter array of the optimizer
+			
+			if (motifWidth == minWidth) 
+			{
+				cout<<"MOTIFWIDTH "<<motifWidth<<" Initialization "<<ini<<endl;
+				parA = 1;
+				parB = RANDOM_PARAM_ENTRY;
+				biasS = -2;
+				biasA = -2;
+				for (int j= 0; j<motifWidth; j++)
+				{
+					for (int k=0; k<AlphabetSize; k++) 
+						baseParams[k][j] = RANDOM_PARAM_ENTRY;                	 
+				}
+				for (int k=0; k<AnnotAlphabetSize; k++)
+					annotParams[k]= RANDOM_PARAM_ENTRY;	
+			}
+			// all the others, based on the previous results
+			else 
+			{
+				inisave= ini % 4;
+				switch (inisave) {
+					case 0: 
+						cout<<"MOTIFWIDTH "<<motifWidth<<" Initialization "<<ini<<endl;
+						biasA = biasAPrev;
+						biasS = biasSPrev;
+						parA = parAPrev;
+						parB = parBPrev;
+						for (int k=0; k<AlphabetSize; k++) {
+							baseParams[k][0] = 0.25;
+							for (int j=1; j<motifWidth; j++) 
+								baseParams[k][j] = baseParamsPrev[k][j-1];
+						}
+						for (int k=0; k<AnnotAlphabetSize; k++)
+							annotParams[k]= annotParamsPrev[k];
+						break;
+						
+					case 1:
+						cout<<"MOTIFWIDTH "<<motifWidth<<" Initialization "<<ini<<endl;
+						
+						parA = parAPrev;
+						parB = parBPrev;
+						biasS = biasSPrev;
+						biasA = biasAPrev;
+						for (int k=0; k<AlphabetSize; k++) {
+							baseParams[k][motifWidth-1] = 0.25;
+							for (int j=0; j<motifWidth-1; j++) 
+								baseParams[k][j] = baseParamsPrev[k][j];
+						}
+						for (int k=0; k<AnnotAlphabetSize; k++)
+							annotParams[k]= annotParamsPrev[k];
+						break;
+						
+					case 2:
+						cout<<"MOTIFWIDTH "<<motifWidth<<" Initialization "<<ini<<endl;
+						parA = 1;
+						parB = RANDOM_PARAM_ENTRY;
+						biasS = -2;
+						biasA = -2;
+						for (int j= 0; j<motifWidth; j++){
+							
+							for (int k=0; k<AlphabetSize; k++) 
+								baseParams[k][j] = RANDOM_PARAM_ENTRY * smallFactor; // e is 0.1
+						}
+						for (int k=0; k<AnnotAlphabetSize; k++)
+							annotParams[k]= RANDOM_PARAM_ENTRY*smallFactor;
+						break;
+					default:
+						cout<<"MOTIFWIDTH "<<motifWidth<<" Initialization "<<ini<<endl;
+						
+						parA = 1;
+						parB = RANDOM_PARAM_ENTRY;
+						biasS = -2;
+						biasA = RANDOM_PARAM_ENTRY;
+						for (int j= 0; j<motifWidth; j++){
+							
+							for (int k=0; k<AlphabetSize; k++) 
+								baseParams[k][j] = RANDOM_PARAM_ENTRY * smallFactor; // e is 0.1
+						}
+						for (int k=0; k<AnnotAlphabetSize; k++)
+							annotParams[k]= RANDOM_PARAM_ENTRY * smallFactor;
+						break;
+				}  //closes switch
+			} //closes the else loop which is for non-minMotidWidths
+			
+			/**************** initialize the parameters of the optimizer **********************************/  
+			cout << "Initializing parameters" << endl;
+			for (int k=0; k<AlphabetSize; k++) {
+				for (int j=0; j<motifWidth; j++){ 
+					x(paramCounter)= baseParams[k][j]; 	
+					constraints(paramCounter) = 0; 		
+					paramCounter++;
+				}	
+			}
+			for (int k=0; k<AnnotAlphabetSize; k++) {
+				x(paramCounter)= annotParams[k]; 	
+				constraints(paramCounter) = 0; 		
+				paramCounter++;
+			}	
+			
+			x(paramCounter) =  biasS;
+			constraints(paramCounter) = 0; 	
+			paramCounter++;
+			x(paramCounter) =  biasA;
+			constraints(paramCounter) = 0; 	
+			paramCounter++;
+			
+			x(paramCounter) =  log(parA);
+			constraints(paramCounter) = 0;
+			paramCounter++;
+			
+			x(paramCounter) =  parB;
+			constraints(paramCounter) = 0; 	
+			paramCounter++;
+	
+			
+			/****************  LBFGS CALL *****************************************************************/  
+						cout << "Calling optimization..." << n << " " << m << endl;
+			lbfgsbminimize(n, m, x, epsg, epsf, epsx, maxiter, constraints, lower_bounds, upper_bounds, info);    
+	   			cout<<"The search is terminated. Case "<<info<<endl; // gives info about why the search is terminated
+			vecToPara(x);  //copy the resulting parameters into the variables
+			error = originalFunc(x);   
+			
+			/* update the best likelihood and all the best parameters */
+			if (error < bestError) 
+			{
+				bestError = error;
+				bestParA = parA;
+				bestParB = parB;
+				bestBiasA = biasA;
+				bestBiasS = biasS;
+				for (int i = 0; i<AlphabetSize; i++)
+					for (int j = 0; j<motifWidth; j++) { 
+						bestBaseParams[i][j] = baseParams[i][j];
+				}
+			
+				for (int i = 0; i<AnnotAlphabetSize; i++)
+				{ 
+					bestAnnotParams[i] = annotParams[i];  
+				}	  
+			}
+			cout << "Updated best likelihood" << endl;
+			
+		}   // closes the for loop that tries different initializations
+		/************SORT THE PARAMS*****************************************************************/
+		cout << "Closed for loop" << endl;
+
+		for (int i=0; i<AlphabetSize; i++) {
+			for (int j=0; j<motifWidth; j++){
+				baseParamsPrev[i][j] = bestBaseParams[i][j];
+			}
+		}
+		for (int i=0; i<AnnotAlphabetSize; i++) {
+		  annotParamsPrev[i] = bestAnnotParams[i];		
+		}
+		parAPrev = bestParA;
+		parBPrev = bestParB;
+		biasSPrev = bestBiasS;
+		biasAPrev = bestBiasA;
+
+		/****************  FPOUT *****************************************************************/  
+		cout << "Outputing parameters" << endl;
+		outParam<<"Motif width "<<mw<<endl;
+		outParam<<"Base parameters "<<endl;
+		//scale base parameters so that a logo can be generated
+		double sum;
+		for (int j=0; j<motifWidth; j++) {
+			double maxValue = -1000;	
+			for (int i=0; i<AlphabetSize; i++) {
+				if(bestBaseParams[i][j] > maxValue)
+					maxValue = bestBaseParams[i][j];
+			}
+			sum += maxValue;
+		}
+		double cons = (-1 * biasS) / sum;  // so that the best motif will have affinity 0.5
+						
+ 
+		for (int i=0; i<AlphabetSize; i++) {
+			for (int j=0; j<motifWidth; j++) {
+				bestBaseParamsScaled[i][j] = bestBaseParams[i][j] * cons;
+			}	
+		}
+
+		// print the scaled parameters
+		for (int i=0; i<AlphabetSize; i++) {
+			outParam<<baseAlphabet[i]<<"\t";
+			for (int j=0; j<motifWidth; j++) {
+				outParam<<-1 * bestBaseParamsScaled[i][j]<<"\t";
+			}
+			outParam<<endl; 	
+		}
+		double* relativeAffinities =  (double *)malloc(sizeof(double) * AnnotAlphabetSize);
+		double maxAffinity = 0;
+		for (int i=0; i<AnnotAlphabetSize; i++) {
+			relativeAffinities[i] = 1 / (1 + exp(-1 * (mw * bestAnnotParams[i] + biasA)));
+			if( relativeAffinities[i] > maxAffinity )
+				maxAffinity = relativeAffinities[i];
+		}
+		outParam<<endl<<"Relative affinities to the structural contexts "<<endl;
+		for (int i=0; i<AnnotAlphabetSize; i++) {
+			relativeAffinities[i] = relativeAffinities[i] / maxAffinity;
+			outParam<<annotAlphabet[i]<<"\t"<<relativeAffinities[i]<<endl;
+		}
+		free(relativeAffinities);
+		outParam<<endl;
+		
+
+				
+		/****************  PRINTING PARAMETERS *****************************************************************/  
+		//assign the best parameters to the current parameters so that they are used in the best kmers calculation
+		
+		for (int i=0; i<AlphabetSize; i++) {
+			for (int j=0; j<motifWidth; j++) {
+				baseParams[i][j] = bestBaseParams[i][j];
+			}
+		}
+		
+		for (int i=0; i<AnnotAlphabetSize; i++) {
+			annotParams[i] = bestAnnotParams[i];
+		}
+											
+		parA = bestParA;
+		parB = bestParB;
+		biasS = bestBiasS;
+		biasA = bestBiasA;
+		
+		//calculate the scores with the best parameters
+		for(int i=0;i<trainSeqNum;i++)
+		{
+			scoresTrain[i] = calcScore(i);			
+		}
+		
+		
+		
+		if(AnnotAlphabetSize > 1) //alph 1 2 or 3 
+			numParams = 3 * motifWidth + AnnotAlphabetSize - 1 + 2 + 2;
+		else 
+			numParams = 3 * motifWidth + AnnotAlphabetSize + 2 + 2;
+		
+		
+		//aic =  -2 * log(bestLlh) * n_hat + numParams * 2;
+		
+		//int lastSlash = outFileName.rfind("/") +1;
+		
+		
+		modelFileName = "/data/cb/yaronore/RNAcontext/RNAcontext/outputs/model_" + outFile + "_" + mwStr + ".txt" ;
+		testFileName = "/data/cb/yaronore/RNAcontext/RNAcontext/outputs/test_" + outFile + "_" +  mwStr + ".txt" ;
+		testFileNameSeq = "/data/cb/yaronore/RNAcontext/RNAcontext/outputs/test_" + outFile + "_" +  mwStr + "_seq.txt" ;
+		rankFileName = "/data/cb/yaronore/RNAcontext/RNAcontext/outputs/train_" + outFile + "_" +  mwStr + ".txt" ;
+
+		/* print the training sequences with their ratios and scores to a file */
+		outTrain.open(rankFileName.c_str());
+		for (int i=0; i < trainSeqNum; i++)
+		{
+   		  	outTrain<<ratiosTrain[i]<<"\t"<<scoresTrain[i]<<endl;  	
+		}	
+		outTrain.close();
+		
+		/* use the best obtained parameters to calculate the error on the tests set */
+		testBestParams(testFileName, modelFileName, numParams); 
+		testBestParamsSeq(testFileNameSeq, modelFileName, numParams); 
+		
+		modelOut.open(modelFileName.c_str(), ios::app);
+		modelOut<<"Error on the training set: "<<bestError<<endl;
+		modelOut<<"Number of parameters: "<<numParams<<endl<<endl;
+		modelOut<<"Base Parameters"<<endl;
+		
+		for (int i=0; i<AlphabetSize; i++) {
+			modelOut<<baseAlphabet[i]<<"\t";
+			for (int j=0; j<motifWidth; j++) {
+				modelOut<<setw(10)<<bestBaseParams[i][j];
+			}
+			modelOut<<endl;
+		}
+		
+		modelOut<<endl;
+		modelOut<<"Annot Parameters for each context in the alphabet: "<<annotAlphabet<<endl;
+		for (int i=0; i<AnnotAlphabetSize; i++) {
+			modelOut<<annotAlphabet[i]<<"\t"<<bestAnnotParams[i] <<endl;
+		}
+		modelOut<<endl<<endl;
+		modelOut<<"Beta_s (bias in sequence model) : "<<bestBiasS<<endl;
+		modelOut<<"Beta_p (bias in structure context model) : " <<bestBiasA<<endl;
+		modelOut<<"alpha (scaling factor) : "<<bestParA<<endl;
+		modelOut<<"b (bias in least squares error model) : "<<bestParB<<endl;
+		modelOut.close();
+				
+		findBestScores(modelFileName, motifWidth, 20); //finds the top 20 kmers and align their profile
+		// to get position specific structure preferences
+		// free everything
+		for (int i=0; i<AlphabetSize; i++) {
+			free(baseParams[i]);
+			free(bestBaseParams[i]);
+			free(bestBaseParamsScaled[i]);
+		}
+		// delta values
+		for(int i = 0 ; i < trainSeqNum ; i++)
+		{	
+			for(int k = 0 ; k<AnnotAlphabetSize ; k++)
+    	    	free(sumAnnotParamsTrain[i][k]);
+    	    free(sumAnnotParamsTrain[i]);
+		
+       		for(int k = 0 ; k<kmerNumsTrain[i]; k++)
+       		{
+    			for(int m = 0 ; m<AlphabetSize; m++)
+    				free(baseDeltaValsTrain[i][k][m]);
+    			free(baseDeltaValsTrain[i][k]);
+      		}
+    		free(baseDeltaValsTrain[i]);
+		}
+		
+	}   // CLOSES THE BIG LOOP --MOTIFWIDTH CHANGES
+	
+	//free  everything that is allocated in main
+	for(int i = 0 ; i < trainSeqNum ; i++)
+	{
+		free(sumBaseParamsTrain[i]);
+		free(AffinitySeqVals[i]);	
+		free(AffinityAnnotVals[i]);
+		free(affinityValsTrain[i]);	
+	}
+	for (int i=0; i<AlphabetSize; i++)
+	{
+		free(baseParamsPrev[i]);
+	}
+	free(means);
+	free(variances);
+	free(baseDeltaValsTrain);
+	free(sumBaseParamsTrain);
+	free(sumAnnotParamsTrain);
+	free(baseParams);
+	free(annotParams);
+	free(AffinitySeqVals);
+	free(AffinityAnnotVals);
+	free(affinityValsTrain);
+	free(kmerNumsTrain);
+	free(kmerNumsTest);
+}
+// Once the test sequences are scored, find the best 20 kmer scores and output the average annotation profile of these 20 kmers
+void findBestScores(string filename, int motifWidth, int numBest)
+{
+    ofstream out;
+  	out.open(filename.c_str(), ios::app);
+	int count = 0;
+	int kmerCount = seqsTrain[0].length()- motifWidth +1 ;
+	
+	vector< vector <double> > profiles(AnnotAlphabetSize); 
+	for(int l = 0 ; l< AnnotAlphabetSize ; l++)
+    {
+	 	profiles[l].resize(motifWidth, 0);
+    }
+	
+	vector< kmerScores> allKmerScores; //(trainSeqNum * kmerCount);
+	
+	for(int seqID = 0; seqID < trainSeqNum ; seqID++)
+	{
+		kmerCount = seqsTrain[seqID].length() - motifWidth + 1;
+		for(int kmer= 0 ; kmer < kmerCount ; kmer++)	
+		{
+			kmerScores kscore;
+			kscore.seqID = seqID;
+			kscore.kmerNum = kmer;
+			kscore.affinity = affinityValsTrain[seqID][kmer];
+			kscore.seqAffinity = AffinitySeqVals[seqID][kmer];
+			kscore.annotAffinity = AffinityAnnotVals[seqID][kmer];
+			allKmerScores.push_back (kscore);
+			count++;
+		}
+    }
+	
+    sort(allKmerScores.begin(), allKmerScores.end(), sort_by_one());
+	out<<endl;
+	out<<"Top 20 kmers: \t sequence number \t kmer number"<<endl;
+    for(int best = 0 ; best < numBest; best++)
+    {
+	    out<<setw(12);
+    	for(int m = 0 ; m < motifWidth ; m++)
+    	{	
+			out<<seqsTrain[allKmerScores[best].seqID][allKmerScores[best].kmerNum+m];
+     	}
+     	//out<<"\t"<<allKmerScores[best].affinity<<"\t"<<allKmerScores[best].seqAffinity<<"\t"<<allKmerScores[best].annotAffinity<<"\t"<<allKmerScores[best].seqID<<"\t"<<allKmerScores[best].kmerNum<<endl;   	
+	    out<<setw(15)<<allKmerScores[best].seqID<<setw(15)<<allKmerScores[best].kmerNum<<endl;   	
+    }
+	out<<endl;
+	out<<"Averaged annotation profiles of the top 20 kmers"<<endl;
+    for(int l = 0 ; l< AnnotAlphabetSize ; l++)
+    {  	 
+    	out<<annotAlphabet[l]<<"\t"; 	    	 	 
+     	for(int m = 0; m < motifWidth; m++)
+     	{
+			for(int best = 0 ; best < numBest; best++)
+			{
+				profiles[l][m] += inputAnnotsTrain[allKmerScores[best].seqID][l][allKmerScores[best].kmerNum+m] ; 
+			}
+			profiles[l][m] /= numBest;
+			out<<profiles[l][m]<<"\t";			
+	    }		
+        out<<endl;
+    } 
+    out.close();
+    allKmerScores.clear();
+    profiles.clear();    
+}
+
+
+
+// Calculates the score of the sequence with sequence id seqID
+double calcScore(int seqID)
+{
+  double score = 0;
+  double storeSumBase = 0;
+  double sumAnnotWeights = 0 ;
+  
+  for(int kmer = 0; kmer< kmerNumsTrain[seqID]; kmer++) // all kmers
+  {
+    //		cout<<"seq "<<seqID<<" kmer "<<kmer<<endl;
+  		sumBaseParamsTrain[seqID][kmer] = sumBaseParamsFunc(seqID, kmer); 		
+  }
+  //  cout << "After all k-mers" << endl;
+  for(int kmer = 0; kmer< kmerNumsTrain[seqID] ; kmer++) // all kmers
+  {
+		//cout<<"kmer "<<kmer<<endl;
+  	 	storeSumBase = sumBaseParamsTrain[seqID][kmer];
+  	 	AffinitySeqVals[seqID][kmer] = 1.0 / (1.0 + exp( -1 * (biasS + storeSumBase))); 
+		//cout<<"seq done "<<endl;
+  	 	sumAnnotWeights = 0;
+  	 	for(int letter = 0; letter < AnnotAlphabetSize ; letter++) // for L,R,P,U,H etc.
+  	 	{
+                //    cout<<" letter "<<letter<<endl;	
+  	 	    sumAnnotParamsTrain[seqID][letter][kmer] = sumProfilesFunc(seqID, letter, kmer);
+  	 	    sumAnnotWeights += annotParams[letter] * sumAnnotParamsTrain[seqID][letter][kmer];   
+	        }
+	    	//cout<<"annot done "<<kmer<<endl;
+		AffinityAnnotVals[seqID][kmer] = 1.0 / (1.0 + exp(-1 * (biasA + sumAnnotWeights)));
+	    affinityValsTrain[seqID][kmer] = (AffinitySeqVals[seqID][kmer] * AffinityAnnotVals[seqID][kmer]) - SMALL1;
+   	 	
+   	 	score +=  affinityValsTrain[seqID][kmer];  
+ }
+  
+  return score;
+}
+
+// Calculates the score of a test sequence
+double calcScoreTest(int seqID)
+{
+  double score = 0;
+  double storeSumBase = 0;
+  double sumAnnotWeights = 0 ;
+  double sumAnnot;
+  double affSeq, affAnnot, occ;
+
+  for(int kmer = 0; kmer< kmerNumsTest[seqID] ; kmer++) // all kmers //
+  {
+  	 	storeSumBase = sumBaseParamsTestFunc(seqID, kmer);
+  	 	affSeq = 1.0 / (1.0 + exp( -1 * (biasS + storeSumBase))); 
+  	 	sumAnnotWeights = 0; //reset sumAnnotWeights 
+  	 	for(int letter = 0; letter < AnnotAlphabetSize ; letter++) // for L,R,P,U,H etc.
+  	 	{	
+  	 		sumAnnot = sumProfilesFuncTest(seqID, letter, kmer);
+  	 	    sumAnnotWeights += annotParams[letter] * sumAnnot;   
+	    }
+	    affAnnot = 1.0 / (1.0 + exp(-1 * (biasA + sumAnnotWeights)));
+	    occ = (affSeq * affAnnot);// - small1;
+   	 	score += occ;  
+  }
+
+  return score;
+}
+// Calculates the score of a test sequence
+double calcScoreTestSeq(int seqID)
+{
+  double score = 0;
+  double storeSumBase = 0;
+  double affSeq, occ;
+
+  for(int kmer = 0; kmer< kmerNumsTest[seqID] ; kmer++) // all kmers //
+  {
+  	 	storeSumBase = sumBaseParamsTestFunc(seqID, kmer);
+  	 	affSeq = 1.0 / (1.0 + exp( -1 * (biasS + storeSumBase))); 
+		occ = affSeq;// - small1;
+   	 	score += occ;
+  } 
+  return score;
+}
+
+// Calculate the gradients
+double calcGradParams(int paramType, int alphIndex =0, int mwIndex = 0)
+{
+  double kmerVal = 0;
+  double storeResult = 0;
+  double storeMult = 0;
+  double result = 0; 
+  double initialTerm = 0;
+  int deltaVal;
+  for(int seqID	= 0; seqID < trainSeqNum; seqID++)
+  { 		
+		initialTerm = 2 * (ratiosTrain[seqID] - ( parA * scoresTrain[seqID]) - parB); // 2 * sum_i (x_i - a*. f_i - b* )
+		
+		if(paramType == A)
+		{
+			storeResult += initialTerm * -1 * scoresTrain[seqID];
+		}
+		else if(paramType == B)
+		{
+			storeResult += initialTerm * -1;
+		}
+		else
+		{
+			for(int kmer = 0; kmer< kmerNumsTrain[seqID] ; kmer++) // for each kmer
+			{
+  	 	
+  	 			if(paramType == BASE)//baseParams
+  	 			{
+  	 					deltaVal = baseDeltaValsTrain[seqID][kmer][alphIndex][mwIndex];
+ 			     	    kmerVal += (deltaVal * AffinityAnnotVals[seqID][kmer] * AffinitySeqVals[seqID][kmer] * (1-AffinitySeqVals[seqID][kmer]) )  ; 
+ 			    }
+ 			    else if(paramType == ANNOT)
+ 			    {
+ 			    	    kmerVal +=  (AffinitySeqVals[seqID][kmer] * AffinityAnnotVals[seqID][kmer] * (1 - AffinityAnnotVals[seqID][kmer]) * sumAnnotParamsTrain[seqID][alphIndex][kmer]);          	           
+			    }
+        	    else if(paramType == BIASS) 
+        	    	 kmerVal +=  AffinityAnnotVals[seqID][kmer] * AffinitySeqVals[seqID][kmer] * (1-AffinitySeqVals[seqID][kmer]);    
+        	    else if(paramType == BIASA) 
+        	     	 kmerVal += (AffinitySeqVals[seqID][kmer] * AffinityAnnotVals[seqID][kmer] * (1 - AffinityAnnotVals[seqID][kmer]));           	
+            }
+
+            storeResult += initialTerm * -1 * parA * kmerVal ;  // negative log likelihood
+            kmerVal = 0;
+       }
+  }
+
+   result = storeResult ;  
+   if(paramType == A)
+		result = parA * result;
+   if(paramType == BASE)
+       result += 2 * SMALL2 * baseParams[basetoInt(baseAlphabet[alphIndex])][mwIndex];      //  regularization
+   else if(paramType == ANNOT)
+   	   result += 2 * SMALL2 * annotParams[alphIndex]; // regularization
+ 
+   return result;
+}
+//calculate the gradients and store them in gradVec
+void gradientFunc(ap::real_1d_array& gradVec, ap::real_1d_array& paraVec) 
+{
+    int count = 1;
+	// map back the base parameters
+	for (int i=0; i<AlphabetSize; i++){
+	  for (int j=0; j<motifWidth; j++) {
+		  gradVec(count) = calcGradParams (BASE, i, j);
+		  count++;
+	   }
+	}
+
+   // map back the annot parameters
+   for (int i=0; i<AnnotAlphabetSize; i++){
+		  gradVec(count) = calcGradParams (ANNOT,i);	  
+		  count++;
+   }
+	//map back bias
+	gradVec(count) = calcGradParams(BIASS); 	
+	count++;
+	
+	gradVec(count) = calcGradParams(BIASA);  
+	count++;
+	//map back A
+	gradVec(count) = calcGradParams(A);	
+	count++;
+	//map back B
+	gradVec(count) = calcGradParams(B);		
+}
+void funcgrad( ap::real_1d_array& x, double& f, ap::real_1d_array& g)
+{
+  //  cout << "In funcgrad" << endl;
+	f=0;
+	f = originalFunc(x);
+	//	cout << "After original func" << endl;
+	gradientFunc(g, x);
+	iter++;
+	//	cout << "End of funcgrad" << endl;
+}
+
+
+// No motif model is learned in this case, given a motif, test sequences are scored
+void scoreSeqs(char *dataFileName, char *annotFileName, char *motifFileName, int minWidth)
+{
+	string scoreFileName;
+	string motifFileNameStr = motifFileName;	
+	int txtIndex = motifFileNameStr.find(".txt");
+	int lastSlash = motifFileNameStr.rfind("/") + 1;
+	//CHANGE THIS
+	scoreFileName = "./outputs/" + motifFileNameStr.substr(lastSlash + 3, txtIndex -lastSlash - 3) + ".txt";
+	testSeqNum = readData(dataFileName,seqsTest, ratiosTest);
+	kmerNumsTest = (int *) malloc(sizeof(int) * testSeqNum);
+	
+	vector<double> stds(AnnotAlphabetSize);
+    // Read the motif model from file
+	ifstream inputMotif;
+	inputMotif.open(motifFileName);
+	if(inputMotif.fail())
+		cout<<" cannot open motif filename"<<endl;
+
+	ofstream out;
+	out.open(scoreFileName.c_str());
+	inputAnnotsTest.resize(testSeqNum);
+	
+	motifWidth = minWidth; 
+	for(int i = 0 ; i < testSeqNum ; i++)
+	{	
+		kmerNumsTest[i] = seqsTest[i].length() - motifWidth +1; 		
+	}
+	
+    for(int i = 0 ; i< testSeqNum ; i++)
+    {
+		inputAnnotsTest[i].resize(AnnotAlphabetSize);	 
+
+		for(int k = 0; k <AnnotAlphabetSize ; k++)
+			inputAnnotsTest[i][k].resize(seqsTest[i].length()); 
+    }
+	readAnnots(annotFileName, inputAnnotsTest, testSeqNum, false); //testSeqNum is assigned here	
+	//score the sequences
+    baseParams = (double **)malloc(AlphabetSize*sizeof(double *));
+    annotParams = (double *)malloc(AnnotAlphabetSize*sizeof(double));
+ 
+  	for (int i=0; i<AlphabetSize; i++) 
+  	{
+  		baseParams[i] = (double *)malloc(motifWidth*sizeof(double));
+    }
+	string line, foo;	
+	double dataTemp;
+	// read the base parameters --Theta
+	for(int i = 0; i < AlphabetSize; i++)
+	{
+		getline(inputMotif, line);
+		istringstream ins;
+		ins.str(line);
+		for(int j = 0; j < motifWidth; j++)
+		{	
+			ins>>baseParams[i][j];
+		}
+	}	
+	getline(inputMotif, line);
+	istringstream ins;
+	ins.str(line);
+	// read the annotation parameters --Gamma
+	for (int i=0; i<AnnotAlphabetSize; i++) 
+	{
+			ins>>dataTemp;
+			annotParams[i] = dataTemp;
+	}
+	getline(inputMotif,line);
+	ins.clear();
+	ins.str(line);
+	ins >>biasS>>biasA>>parA>>parB;
+
+	for(int i = 0; i < testSeqNum; i++)
+	{
+		out<<ratiosTest[i]<<"\t"<<calcScoreTest(i)<<endl;
+	}
+}
+
+
+
+// Reads the input file, fills the global variables seqs and ratios, returns the numeber of probes in the file.
+int readData(string inputFileName, vector<string> & seqs, vector<double> & ratios)
+{
+	int counter = 0;
+	istringstream ins;
+	double ratio;
+	string seq, line, foo;
+	ifstream input;
+	input.open(inputFileName.c_str());
+	if(input.fail())
+	{
+		cout<<" cannot open the input file "<<endl;
+	}
+	else
+	{
+		while(getline(input,line))
+		{
+			istringstream ins;
+			ins.str(line);
+			ins>>ratio>>seq;
+			replace(seq.begin(), seq.end(), 'T','U');
+			seqs.push_back(seq);
+			ratios.push_back(ratio);
+			counter++;
+		}
+	}
+	return counter;
+}	
+
+/*       MAIN        */
+int main(int argc, char **argv)
+{
+	
+	InputParams pm;
+	// set the parameters
+	setParameters(argc, argv, &pm);   // annotalphabetsize is determined here
+	cout << "set parameters" << endl;
+	// open the log file
+	openlogfile(pm.logFileName, MAX_LOGENTRIES);
+	
+	cout << "open log file" << endl;
+	// convert the alphabet to uppercase 
+	Upper(pm.alphabet);  
+	pm.motifFileNameDefinedFlag =0;
+	if(pm.motifFileNameDefinedFlag == 0)
+	{ 
+		trainSeqNum = readData(pm.trainDataFileName, seqsTrain, ratiosTrain); //read the file
+		testSeqNum = readData(pm.testDataFileName, seqsTest, ratiosTest); //read the file		
+	
+		cout << "Read the file" << endl;
+		// Memory allocation for global variables.
+		scoresTrain.resize(trainSeqNum);
+		scoresTest.resize(testSeqNum);
+		baseDeltaValsTrain = (int ****) malloc(sizeof(int***) * trainSeqNum);
+		baseDeltaValsTest = (int ****) malloc(sizeof(int***) * testSeqNum);
+		kmerNumsTrain = (int *) malloc(sizeof(int) * trainSeqNum);
+		kmerNumsTest = (int *) malloc(sizeof(int) * testSeqNum);
+		affinityValsTrain = (double **) malloc(sizeof(double*) * trainSeqNum);
+		AffinitySeqVals = (double **) malloc(sizeof(double*) * trainSeqNum);
+		AffinityAnnotVals = (double **) malloc(sizeof(double*) * trainSeqNum);
+		sumBaseParamsTrain = (double **) malloc(sizeof(double*) * trainSeqNum);
+		sumAnnotParamsTrain = (double ***) malloc(sizeof(double**) * trainSeqNum);
+		means = (double *)malloc(sizeof(double) * AnnotAlphabetSize);
+		variances = (double *)malloc(sizeof(double) * AnnotAlphabetSize);
+		
+		inputAnnotsTrain.resize(trainSeqNum);
+		inputAnnotsTest.resize(testSeqNum);
+		for(int i = 0 ; i< trainSeqNum ; i++)
+		{
+			scoresTrain[i] = 0;
+			kmerNumsTrain[i] = 0;
+			inputAnnotsTrain[i].resize(AnnotAlphabetSize);	
+			for(int k = 0; k <AnnotAlphabetSize ; k++)
+				inputAnnotsTrain[i][k].resize(seqsTrain[i].length());
+			
+		} 
+		for(int i = 0 ; i< testSeqNum ; i++)
+		{
+			inputAnnotsTest[i].resize(AnnotAlphabetSize);	 
+			for(int k = 0; k <AnnotAlphabetSize ; k++)
+				inputAnnotsTest[i][k].resize(seqsTest[i].length()); 
+			
+		}
+		cout << "Going to read annotations..." << endl;
+		// Read the profiles for training and test sequences
+		cout<<"before train annot" <<endl;
+		readAnnots(pm.annotFileNameTrain, inputAnnotsTrain, trainSeqNum, true);
+		cout<<"before test annot "<< pm.annotFileNameTest << " " << testSeqNum << endl;
+		readAnnots(pm.annotFileNameTest, inputAnnotsTest, testSeqNum);
+		cout<<"after test annot "<<endl;
+		// Start searching motifs 
+		if (pm.outFileNameDefinedFlag) 
+		{
+			searchMotif(pm.seedNum, pm.seedWidth, pm.minWidth, pm.maxWidth, pm.outFileName, pm.annotFileNameTrain);
+		}
+		cout << "Read annotations" << endl;
+	}
+	else // score the test sequences given a motif model
+	{
+		scoreSeqs(pm.testDataFileName, pm.annotFileNameTest, pm.motifFileName, pm.minWidth);
+	}
+
+	
+	
+	
+	return 0;
+}
+
+
+
+

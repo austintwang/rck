@@ -1,0 +1,33 @@
+<h1>Inference Task {{ task_id }}</h1>
+<p>Task {{ task_id }} has completed</p>
+<form action="{% url 'rck_runner:get_results_file' task_id %}">
+    <input type="submit" value="Download Results" />
+</form>
+{% for w in widths %}
+	<h2>Width {{ w }}</h2>
+		<h3>Sequence Logo</h3>
+			<img\ url={{models.w.logo.url}}>
+		<h3>Structural Preferences</h3>
+			<img\ url={{models.w.struc_pref_graph.url}}>
+		<h3>Statistics</h3>
+			<table style="width:100%">
+			<tr>
+				<th>CV-fold</th>
+				<th>AUROC</th> 
+				<th>Correlation</th>
+			</tr>
+			{% for x in xvalfolds.w %}
+			<tr>
+				<td>{{ x }}</td>
+				<td>{{ xvals.w.x.auc }}</td>
+				<td>{{ xvals.w.x.corr }}</td>
+			</tr>
+			{% endfor %}
+			<tr>
+				<td>Avg</td>
+				<td>{{ models.w.auc_avg}}</td>
+				<td>{{ models.w.corr_avg }}</td>
+			</tr>
+			</table>
+{% endfor %}
+
